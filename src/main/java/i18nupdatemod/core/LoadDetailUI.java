@@ -18,7 +18,14 @@ public class LoadDetailUI {
     private final boolean useGUI;
 
     private LoadDetailUI() {
-        useGUI = Boolean.parseBoolean(System.getProperty("java.awt.headless"));
+        useGUI = !Boolean.parseBoolean(System.getProperty("java.awt.headless", "false"));
+
+        if (!useGUI) {
+            frame = null;
+            statusBar = null;
+            logArea = null;
+            return;
+        }
 
         frame = new JFrame();
         frame.setTitle("I18nUpdateMod-资源包下载进度");
@@ -94,21 +101,36 @@ public class LoadDetailUI {
     }
 
     public static void show() {
-        getInstance().frame.setVisible(true);
+        LoadDetailUI gui = getInstance();
+        if (!gui.useGUI || gui.frame == null) {
+            return;
+        }
+        gui.frame.setVisible(true);
     }
 
     public static void hide() {
-        getInstance().frame.setVisible(false);
+        LoadDetailUI gui = getInstance();
+        if (!gui.useGUI || gui.frame == null) {
+            return;
+        }
+        gui.frame.setVisible(false);
     }
 
     private void shutdown(){
+        if (!useGUI) {
+            I18nUpdateMod.shouldShutdown = true;
+            return;
+        }
         hide();
         I18nUpdateMod.shouldShutdown = true;
     }
 
     public static void setStage(LoadStage stage) {
+        LoadDetailUI gui = getInstance();
+        if (!gui.useGUI || gui.statusBar == null || gui.logArea == null) {
+            return;
+        }
         SwingUtilities.invokeLater(() -> {
-            LoadDetailUI gui = getInstance();
             gui.statusBar.setString(LoadStage.getDescription(stage));
             gui.statusBar.setValue(stage.getValue());
             gui.logArea.append("当前阶段: " + LoadStage.getDescription(stage) + "\n");
@@ -117,8 +139,11 @@ public class LoadDetailUI {
     }
 
     public static void appendLog(String log) {
+        LoadDetailUI gui = getInstance();
+        if (!gui.useGUI || gui.logArea == null) {
+            return;
+        }
         SwingUtilities.invokeLater(() -> {
-            LoadDetailUI gui = getInstance();
             gui.logArea.append(log + "\n");
             gui.logArea.setCaretPosition(gui.logArea.getDocument().getLength());
         });
