@@ -118,6 +118,7 @@ public class I18nUpdateMod {
             Log.warning(String.format("Failed to update resource pack: %s", e));
             LoadDetailUI.appendLog(String.format("I18n Update Mod 运行失败: %s", e));
             LoadDetailUI.appendLog("请您手动关闭此窗口");
+            return;
 //            e.printStackTrace();
         }
         LoadDetailUI.hide();
