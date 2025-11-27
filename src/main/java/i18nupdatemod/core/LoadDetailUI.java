@@ -2,6 +2,7 @@ package i18nupdatemod.core;
 
 import i18nupdatemod.I18nUpdateMod;
 import i18nupdatemod.entity.LoadStage;
+import i18nupdatemod.util.Log;
 
 import javax.swing.*;
 import java.awt.*;
@@ -117,12 +118,12 @@ public class LoadDetailUI {
     }
 
     private void shutdown(){
+        I18nUpdateMod.shouldShutdown = true;
+        Log.info("User shutdown task");
         if (!useGUI) {
-            I18nUpdateMod.shouldShutdown = true;
             return;
         }
         hide();
-        I18nUpdateMod.shouldShutdown = true;
     }
 
     public static void setStage(LoadStage stage) {
