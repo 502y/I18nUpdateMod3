@@ -1,6 +1,6 @@
 package i18nupdatemod.entity;
 
-public enum LoadStage{
+public enum LoadStage {
     INIT(0),
     DOWNLOAD_ASSET(1),
     CONVERT_RESOURCE_PACK(2),
@@ -18,7 +18,7 @@ public enum LoadStage{
     }
 
     public static String getDescription(LoadStage stage) {
-        switch (stage){
+        switch (stage) {
             case INIT:
                 return "初始化";
             case DOWNLOAD_ASSET:

@@ -56,10 +56,10 @@ public class LoadDetailUI {
 
         // 状态栏
         statusBar = new JProgressBar();
-        statusBar.setString("正在合并资源包");
+        statusBar.setString(LoadStage.getDescription(LoadStage.INIT));
         statusBar.setStringPainted(true);
         statusBar.setMaximum(LoadStage.values().length - 1);
-        statusBar.setValue(100);
+        statusBar.setValue(0);
         statusBar.setForeground(new Color(102, 255, 102));
         panel.add(statusBar);
         panel.add(Box.createVerticalStrut(10));
@@ -106,7 +106,7 @@ public class LoadDetailUI {
         if (!gui.useGUI || gui.frame == null) {
             return;
         }
-        gui.frame.setVisible(true);
+        SwingUtilities.invokeLater(() -> gui.frame.setVisible(true));
     }
 
     public static void hide() {
@@ -114,7 +114,7 @@ public class LoadDetailUI {
         if (!gui.useGUI || gui.frame == null) {
             return;
         }
-        gui.frame.setVisible(false);
+        SwingUtilities.invokeLater(() -> gui.frame.setVisible(false));
     }
 
     private void shutdown(){

@@ -62,7 +62,7 @@ public class I18nConfig {
         LoadDetailUI.appendLog("正在获取最快的镜像源...");
         String assetRoot = getFastestUrl();
         Log.debug("Using asset root: " + assetRoot);
-        LoadDetailUI.appendLog("即将从"+assetRoot+"下载资源包");
+        LoadDetailUI.appendLog("即将从 " + assetRoot + " 下载资源包");
 
         if (assetRoot.equals("https://raw.githubusercontent.com/")) {
             ret.downloads = createDownloadDetailsFromGit(convert, loader);

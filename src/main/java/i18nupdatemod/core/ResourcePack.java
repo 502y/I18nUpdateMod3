@@ -41,14 +41,14 @@ public class ResourcePack {
 
     public void checkUpdate(String fileUrl, String md5Url) throws IOException, URISyntaxException, NoSuchAlgorithmException {
         if (isUpToDate(md5Url)) {
-            LoadDetailUI.appendLog(filename + "无需更新");
+            LoadDetailUI.appendLog(filename + " 无需更新");
             Log.debug("Already up to date.");
             return;
         }
         //In this time, we can only download full file
-        LoadDetailUI.appendLog("正在下载" + filename);
+        LoadDetailUI.appendLog("正在下载 " + filename);
         downloadFull(fileUrl, md5Url);
-        LoadDetailUI.appendLog(filename + "下载完成");
+        LoadDetailUI.appendLog(filename + " 下载完成");
         //In the future, we will download patch file and merge local file
     }
 

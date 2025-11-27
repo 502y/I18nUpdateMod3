@@ -105,7 +105,7 @@ public class I18nUpdateMod {
 
             //Apply resource pack
             LoadDetailUI.setStage(LoadStage.APPLY_RESOURCE_PACK);
-            if (shouldShutdown){
+            if (shouldShutdown) {
                 return;
             }
             GameConfig config = new GameConfig(minecraftPath.resolve("options.txt"));
