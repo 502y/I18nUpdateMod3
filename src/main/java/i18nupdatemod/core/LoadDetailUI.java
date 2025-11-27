@@ -117,7 +117,7 @@ public class LoadDetailUI {
         SwingUtilities.invokeLater(() -> gui.frame.setVisible(false));
     }
 
-    private void shutdown(){
+    private void shutdown() {
         I18nUpdateMod.shouldShutdown = true;
         Log.info("User shutdown task");
         if (!useGUI) {

@@ -6,13 +6,13 @@ public enum LoadStage {
     CONVERT_RESOURCE_PACK(2),
     APPLY_RESOURCE_PACK(3),
     FINISH(4);
-    
+
     private final int value;
-    
+
     LoadStage(int value) {
         this.value = value;
     }
-    
+
     public int getValue() {
         return value;
     }

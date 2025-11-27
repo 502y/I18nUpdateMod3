@@ -92,7 +92,7 @@ public class I18nUpdateMod {
 
             //Convert resourcepack
             LoadDetailUI.setStage(LoadStage.CONVERT_RESOURCE_PACK);
-            if (shouldShutdown){
+            if (shouldShutdown) {
                 return;
             }
             if (!convertNotNeed) {
