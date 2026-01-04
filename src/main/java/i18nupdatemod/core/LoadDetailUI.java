@@ -149,4 +149,20 @@ public class LoadDetailUI {
             gui.logArea.setCaretPosition(gui.logArea.getDocument().getLength());
         });
     }
+
+    public static void autoClose(int delayTime){
+        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                Thread.sleep(delayTime);
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                hide();
+            }
+        };
+        worker.execute();
+    }
 }
