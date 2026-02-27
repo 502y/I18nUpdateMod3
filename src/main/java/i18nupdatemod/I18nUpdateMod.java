@@ -34,6 +34,9 @@ public class I18nUpdateMod {
         LoadDetailUI.setStage(LoadStage.INIT);
 
         try (InputStream is = I18nUpdateMod.class.getResourceAsStream("/i18nMetaData.json")) {
+            if (is == null) {
+                throw new IllegalStateException("/i18nMetaData.json not found");
+            }
             MOD_VERSION = GSON.fromJson(new InputStreamReader(is), JsonObject.class).get("version").getAsString();
         } catch (Exception e) {
             Log.warning("Error getting version: " + e);
