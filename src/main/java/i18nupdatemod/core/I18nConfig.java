@@ -71,10 +71,13 @@ public class I18nConfig {
             ret.downloads = createDownloadDetails(convert, loader, assetRoot);
         }
 
-        ret.covertPackFormat = convert.packFormat;
         ret.covertFileName =
                 String.format("Minecraft-Mod-Language-Modpack-Converted-%s.zip", minecraftVersion);
         return ret;
+    }
+
+    public static GameMetaData getPackFormat(String minecraftVersion) {
+        return getGameMetaData(minecraftVersion);
     }
 
     private static List<GameAssetDetail.AssetDownloadDetail> createDownloadDetails(GameMetaData convert, String loader, String assetRoot) {
