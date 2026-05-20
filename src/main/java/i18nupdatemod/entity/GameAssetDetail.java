@@ -4,7 +4,6 @@ import java.util.List;
 
 public class GameAssetDetail {
     public List<AssetDownloadDetail> downloads;
-    public Integer covertPackFormat;
     public String covertFileName;
 
     public static class AssetDownloadDetail {

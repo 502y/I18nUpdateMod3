@@ -7,6 +7,7 @@ import i18nupdatemod.core.I18nConfig;
 import i18nupdatemod.core.ResourcePack;
 import i18nupdatemod.core.ResourcePackConverter;
 import i18nupdatemod.entity.GameAssetDetail;
+import i18nupdatemod.entity.GameMetaData;
 import i18nupdatemod.util.FileUtil;
 import i18nupdatemod.util.Log;
 import org.jetbrains.annotations.NotNull;
@@ -76,8 +77,9 @@ public class I18nUpdateMod {
             //Convert resourcepack
             FileUtil.setTemporaryDirPath(Paths.get(localStorage, "." + MOD_ID, minecraftVersion));
             String applyFileName = assets.covertFileName;
+            GameMetaData metaData = I18nConfig.getPackFormat(minecraftVersion);
             ResourcePackConverter converter = new ResourcePackConverter(languagePacks, applyFileName);
-            converter.convert(assets.covertPackFormat, getResourcePackDescription(assets.downloads), modDomainsSet);
+            converter.convert(metaData, getResourcePackDescription(assets.downloads), modDomainsSet);
 
             //Apply resource pack
             GameConfig config = new GameConfig(minecraftPath.resolve("options.txt"));
