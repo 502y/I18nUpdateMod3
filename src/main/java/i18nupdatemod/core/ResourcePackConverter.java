@@ -71,7 +71,6 @@ public class ResourcePackConverter {
                 }
             }
             zos.close();
-            //Log.debug("unsolved mod domains" + modDomainsSet.toString());
             Log.info("Converted: %s -> %s", sourcePath, tmpFilePath);
             FileUtil.syncTmpFile(tmpFilePath, filePath);
         } catch (Exception e) {
