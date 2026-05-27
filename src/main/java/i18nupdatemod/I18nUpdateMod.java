@@ -8,18 +8,25 @@ import i18nupdatemod.core.ResourcePack;
 import i18nupdatemod.core.ResourcePackConverter;
 import i18nupdatemod.entity.GameAssetDetail;
 import i18nupdatemod.entity.GameMetaData;
+import i18nupdatemod.mod.ModNamespaceScanner;
+import i18nupdatemod.sync.Rule;
+import i18nupdatemod.sync.SyncClient;
+import i18nupdatemod.sync.SyncResourcePack;
 import i18nupdatemod.util.FileUtil;
 import i18nupdatemod.util.Log;
-import org.jetbrains.annotations.NotNull;
+import i18nupdatemod.util.Version;
 
-import java.io.*;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -29,14 +36,15 @@ public class I18nUpdateMod {
 
     public static final Gson GSON = new Gson();
 
-    public static void init(Path minecraftPath, String minecraftVersion, String loader, @NotNull HashSet<String> modDomainsSet) {
+    // TODO: replace with production URL or read from i18nMetaData.json once finalised.
+    private static final String SYNC_SERVER_URL = "http://203.135.99.76:30063";
+
+    public static void init(Path minecraftPath, String minecraftVersion, String loader) {
         try (InputStream is = I18nUpdateMod.class.getResourceAsStream("/i18nMetaData.json")) {
             MOD_VERSION = GSON.fromJson(new InputStreamReader(is), JsonObject.class).get("version").getAsString();
         } catch (Exception e) {
             Log.warning("Error getting version: " + e);
         }
-
-        modDomainsSet.remove("i18nupdatemod");
 
         Log.info(String.format("I18nUpdate Mod %s is loaded in %s with %s", MOD_VERSION, minecraftVersion, loader));
         Log.debug(String.format("Minecraft path: %s", minecraftPath));
@@ -56,39 +64,111 @@ public class I18nUpdateMod {
         } catch (ClassNotFoundException ignored) {
         }
 
-        FileUtil.setResourcePackDirPath(minecraftPath.resolve("resourcepacks"));
+        Path resourcePacksDir = minecraftPath.resolve("resourcepacks");
+        FileUtil.setResourcePackDirPath(resourcePacksDir);
 
         int minecraftMajorVersion = Integer.parseInt(minecraftVersion.split("\\.")[1]);
 
         try {
-            //Get asset
+            //Asset metadata is used by both flows for pack format + description.
             GameAssetDetail assets = I18nConfig.getAssetDetail(minecraftVersion, loader);
-
-            //Update resource pack
-            List<ResourcePack> languagePacks = new ArrayList<>();
-            for (GameAssetDetail.AssetDownloadDetail it : assets.downloads) {
-                FileUtil.setTemporaryDirPath(Paths.get(localStorage, "." + MOD_ID, it.targetVersion));
-                ResourcePack languagePack = new ResourcePack(it.fileName);
-                languagePack.checkUpdate(it.fileUrl, it.md5Url);
-                languagePacks.add(languagePack);
-            }
-
-            //Convert resourcepack
-            FileUtil.setTemporaryDirPath(Paths.get(localStorage, "." + MOD_ID, minecraftVersion));
-            String applyFileName = assets.covertFileName;
             GameMetaData metaData = I18nConfig.getPackFormat(minecraftVersion);
-            ResourcePackConverter converter = new ResourcePackConverter(languagePacks, applyFileName);
-            converter.convert(metaData, getResourcePackDescription(assets.downloads), modDomainsSet);
+            String description = getResourcePackDescription(assets.downloads);
+
+            String appliedFilename;
+            if (trySyncFlow(localStorage, resourcePacksDir, minecraftPath, minecraftVersion, metaData, description)) {
+                appliedFilename = syncOutputFilename(minecraftVersion);
+            } else {
+                //Fallback: full-download flow. Re-scan with empty rules to get base
+                //namespaces for the asset filter (no CFPA expansion needed).
+                Set<String> baseNamespaces = ModNamespaceScanner.resolveNamespaces(minecraftPath, Collections.emptyList());
+                HashSet<String> modDomainsSet = new HashSet<>(baseNamespaces);
+
+                List<ResourcePack> languagePacks = new ArrayList<>();
+                for (GameAssetDetail.AssetDownloadDetail it : assets.downloads) {
+                    FileUtil.setTemporaryDirPath(Paths.get(localStorage, "." + MOD_ID, it.targetVersion));
+                    ResourcePack languagePack = new ResourcePack(it.fileName);
+                    languagePack.checkUpdate(it.fileUrl, it.md5Url);
+                    languagePacks.add(languagePack);
+                }
+
+                FileUtil.setTemporaryDirPath(Paths.get(localStorage, "." + MOD_ID, minecraftVersion));
+                ResourcePackConverter converter = new ResourcePackConverter(languagePacks, assets.covertFileName);
+                converter.convert(metaData, description, modDomainsSet);
+                appliedFilename = assets.covertFileName;
+            }
 
             //Apply resource pack
             GameConfig config = new GameConfig(minecraftPath.resolve("options.txt"));
             config.addResourcePack("Minecraft-Mod-Language-Modpack",
-                    (minecraftMajorVersion <= 12 ? "" : "file/") + applyFileName);
+                    (minecraftMajorVersion <= 12 ? "" : "file/") + appliedFilename);
             config.writeToFile();
         } catch (Exception e) {
             Log.warning(String.format("Failed to update resource pack: %s", e));
 //            e.printStackTrace();
         }
+    }
+
+    private static boolean trySyncFlow(String localStorage,
+                                       Path resourcePacksDir,
+                                       Path minecraftPath,
+                                       String minecraftVersion,
+                                       GameMetaData metaData,
+                                       String description) {
+        // The server only serves a fixed set of MC versions (matching the official
+        // CFPA resource packs). Map the actual game version to the highest entry
+        // in metaData.convertFrom — the same set used by the legacy full-download
+        // flow to pick which pack to merge from.
+        String syncVersion = pickSyncVersion(metaData);
+        if (syncVersion == null) {
+            Log.info("Sync: no supported version for %s, falling back", minecraftVersion);
+            return false;
+        }
+        try {
+            SyncClient client = new SyncClient(SYNC_SERVER_URL);
+
+            // 1. Rules first (cheap network); 2. single jar walk with rule context
+            //    produces final CFPA-resolved namespace set in one pass.
+            List<Rule> rules = client.fetchRules(syncVersion);
+            Log.info("Sync: fetched %d rules for %s", rules.size(), syncVersion);
+            Set<String> resolved = ModNamespaceScanner.resolveNamespaces(minecraftPath, rules);
+            Log.debug("Sync: resolved %d CFPA-aware namespaces", resolved.size());
+
+            Path syncCache = Paths.get(localStorage, "." + MOD_ID, syncVersion, "sync");
+            SyncResourcePack syncPack = new SyncResourcePack(
+                    client,
+                    syncCache,
+                    resourcePacksDir,
+                    syncVersion,
+                    syncOutputFilename(minecraftVersion));
+            Path produced = syncPack.apply(new ArrayList<>(resolved), metaData, description);
+            return produced != null;
+        } catch (Exception e) {
+            Log.warning("Sync flow failed, falling back to full download: " + e);
+            return false;
+        }
+    }
+
+    /** Highest version in {@code metaData.convertFrom}, or null when none parseable. */
+    private static String pickSyncVersion(GameMetaData metaData) {
+        if (metaData == null || metaData.convertFrom == null || metaData.convertFrom.isEmpty()) {
+            return null;
+        }
+        String highestRaw = null;
+        Version highestParsed = null;
+        for (String candidate : metaData.convertFrom) {
+            Version parsed = Version.from(candidate);
+            if (parsed == null) continue;
+            if (highestParsed == null || parsed.compareTo(highestParsed) > 0) {
+                highestParsed = parsed;
+                highestRaw = candidate;
+            }
+        }
+        return highestRaw;
+    }
+
+    private static String syncOutputFilename(String minecraftVersion) {
+        return String.format("Minecraft-Mod-Language-Modpack-Sync-%s.zip", minecraftVersion);
     }
 
     private static String getResourcePackDescription(List<GameAssetDetail.AssetDownloadDetail> downloads) {

@@ -28,8 +28,10 @@ tasks.shadowJar {
     minimize()
     archiveBaseName.set("I18nUpdateMod")
     relocate("com.google.archivepatcher", "include.com.google.archivepatcher")
+    relocate("io.airlift.compress", "include.io.airlift.compress")
     dependencies {
         include(dependency("net.runelite.archive-patcher:archive-patcher-applier:.*"))
+        include(dependency("io.airlift:aircompressor:.*"))
     }
     exclude("LICENSE")
 }
@@ -59,6 +61,9 @@ dependencies {
     implementation("commons-io:commons-io:2.16.1")
     implementation("org.ow2.asm:asm:9.7")
     implementation("com.google.code.gson:gson:2.11.0")
+
+    // Pure Java zstd decoder (no native libs). Used by sync protocol.
+    implementation("io.airlift:aircompressor:0.27")
 
 }
 
