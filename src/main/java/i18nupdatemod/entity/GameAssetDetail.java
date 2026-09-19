@@ -4,7 +4,9 @@ import java.util.List;
 
 public class GameAssetDetail {
     public List<AssetDownloadDetail> downloads;
-    public String covertFileName;
+    public String convertedFileName;
+    public GameMetaData packMetaData;
+    public String description;
 
     public static class AssetDownloadDetail {
         public String fileName;

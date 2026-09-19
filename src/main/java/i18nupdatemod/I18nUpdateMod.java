@@ -4,11 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import i18nupdatemod.core.GameConfig;
 import i18nupdatemod.core.I18nConfig;
-import i18nupdatemod.core.ResourcePack;
+import i18nupdatemod.core.ResourcePackDownloader;
 import i18nupdatemod.core.ResourcePackConverter;
 import i18nupdatemod.entity.GameAssetDetail;
-import i18nupdatemod.entity.GameMetaData;
-import i18nupdatemod.util.FileUtil;
 import i18nupdatemod.util.Log;
 import org.jetbrains.annotations.NotNull;
 
@@ -16,11 +14,9 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class I18nUpdateMod {
@@ -56,34 +52,27 @@ public class I18nUpdateMod {
         } catch (ClassNotFoundException ignored) {
         }
 
-        FileUtil.setResourcePackDirPath(minecraftPath.resolve("resourcepacks"));
-
         int minecraftMajorVersion = Integer.parseInt(minecraftVersion.split("\\.")[1]);
 
         try {
             //Get asset
-            GameAssetDetail assets = I18nConfig.getAssetDetail(minecraftVersion, loader);
+            GameAssetDetail plan = I18nConfig.getAssetDetail(minecraftVersion, loader);
 
             //Update resource pack
-            List<ResourcePack> languagePacks = new ArrayList<>();
-            for (GameAssetDetail.AssetDownloadDetail it : assets.downloads) {
-                FileUtil.setTemporaryDirPath(Paths.get(localStorage, "." + MOD_ID, it.targetVersion));
-                ResourcePack languagePack = new ResourcePack(it.fileName);
-                languagePack.checkUpdate(it.fileUrl, it.md5Url);
-                languagePacks.add(languagePack);
-            }
+            Path resourcePackDirectory = minecraftPath.resolve("resourcepacks");
+            Path cacheRoot = Paths.get(localStorage, "." + MOD_ID);
+            List<Path> sourcePaths = ResourcePackDownloader.download(plan.downloads, resourcePackDirectory, cacheRoot);
 
             //Convert resourcepack
-            FileUtil.setTemporaryDirPath(Paths.get(localStorage, "." + MOD_ID, minecraftVersion));
-            String applyFileName = assets.covertFileName;
-            GameMetaData metaData = I18nConfig.getPackFormat(minecraftVersion);
-            ResourcePackConverter converter = new ResourcePackConverter(languagePacks, applyFileName);
-            converter.convert(metaData, getResourcePackDescription(assets.downloads), modDomainsSet);
+            Path convertedCache = cacheRoot.resolve(minecraftVersion).resolve(plan.convertedFileName);
+            Path convertedOutput = resourcePackDirectory.resolve(plan.convertedFileName);
+            ResourcePackConverter converter = new ResourcePackConverter(sourcePaths, convertedCache, convertedOutput);
+            Path convertedPack = converter.convert(plan.packMetaData, plan.description, modDomainsSet);
 
             //Apply resource pack
             GameConfig config = new GameConfig(minecraftPath.resolve("options.txt"));
             config.addResourcePack("Minecraft-Mod-Language-Modpack",
-                    (minecraftMajorVersion <= 12 ? "" : "file/") + applyFileName);
+                    (minecraftMajorVersion <= 12 ? "" : "file/") + convertedPack.getFileName().toString());
             config.writeToFile();
         } catch (Exception e) {
             Log.warning(String.format("Failed to update resource pack: %s", e));
@@ -91,14 +80,6 @@ public class I18nUpdateMod {
         }
     }
 
-    private static String getResourcePackDescription(List<GameAssetDetail.AssetDownloadDetail> downloads) {
-        return downloads.size() > 1 ?
-                String.format("该包由%s版本合并\n作者：CFPA团队及汉化项目贡献者",
-                        downloads.stream().map(it -> it.targetVersion).collect(Collectors.joining("和"))) :
-                String.format("该包对应的官方支持版本为%s\n作者：CFPA团队及汉化项目贡献者",
-                        downloads.get(0).targetVersion);
-
-    }
 
     public static String getLocalStoragePos(Path minecraftPath) {
         Path userHome = Paths.get(System.getProperty("user.home"));

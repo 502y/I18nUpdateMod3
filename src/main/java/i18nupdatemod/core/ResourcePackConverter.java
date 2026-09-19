@@ -16,7 +16,6 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -27,52 +26,56 @@ public class ResourcePackConverter {
     private final Path filePath;
     private final Path tmpFilePath;
 
-    public ResourcePackConverter(List<ResourcePack> resourcePack, String filename) {
-        this.sourcePath = resourcePack.stream().map(ResourcePack::getTmpFilePath).collect(Collectors.toList());
-        this.filePath = FileUtil.getResourcePackPath(filename);
-        this.tmpFilePath = FileUtil.getTemporaryPath(filename);
+    public ResourcePackConverter(List<Path> sourcePaths, Path tmpFilePath, Path filePath) {
+        this.sourcePath = sourcePaths;
+        this.tmpFilePath = tmpFilePath;
+        this.filePath = filePath;
     }
 
-    public void convert(GameMetaData metaData, String description, HashSet<String> modDomainsSet) throws Exception {
+    public Path convert(GameMetaData metaData, String description, HashSet<String> modDomainsSet) throws Exception {
+        FileUtil.safeCreateDir(tmpFilePath.getParent());
+        FileUtil.safeCreateDir(filePath.getParent());
         Set<String> fileList = new HashSet<>();
-        try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(tmpFilePath), StandardCharsets.UTF_8)) {
-//            zos.setMethod(ZipOutputStream.STORED);
-            for (Path p : sourcePath) {
-                Log.info("Converting: " + p);
-                try (ZipFile zf = new ZipFile(p.toFile(), StandardCharsets.UTF_8)) {
-                    for (Enumeration<? extends ZipEntry> e = zf.entries(); e.hasMoreElements(); ) {
-                        ZipEntry ze = e.nextElement();
-                        String name = ze.getName();
-                        String[] parts = name.split("/");
-                        // 正在筛选的是assets/modDomain/** && 当前的modDomain不需要
-                        if (parts.length >= 2 && !modDomainsSet.contains(parts[1])) {
-                            continue;
-                        }
+        try {
+            try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(tmpFilePath), StandardCharsets.UTF_8)) {
+    //            zos.setMethod(ZipOutputStream.STORED);
+                for (Path p : sourcePath) {
+                    Log.info("Converting: " + p);
+                    try (ZipFile zf = new ZipFile(p.toFile(), StandardCharsets.UTF_8)) {
+                        for (Enumeration<? extends ZipEntry> e = zf.entries(); e.hasMoreElements(); ) {
+                            ZipEntry ze = e.nextElement();
+                            String name = ze.getName();
+                            String[] parts = name.split("/");
+                            // 正在筛选的是assets/modDomain/** && 当前的modDomain不需要
+                            if (parts.length >= 2 && !modDomainsSet.contains(parts[1])) {
+                                continue;
+                            }
 
-                        // Don't put same file
-                        if (fileList.contains(name)) {
-//                            Log.debug(name + ": DUPLICATE");
-                            continue;
-                        }
-                        fileList.add(name);
+                            // Don't put same file
+                            if (fileList.contains(name)) {
+    //                            Log.debug(name + ": DUPLICATE");
+                                continue;
+                            }
+                            fileList.add(name);
 
-                        // Put file into new zip
-                        zos.putNextEntry(new ZipEntry(name));
-                        InputStream is = zf.getInputStream(ze);
-                        if (name.equalsIgnoreCase("pack.mcmeta")) {
-                            //Convert pack.mcmeta
-                            zos.write(convertPackMeta(is, metaData, description));
-                        } else {
-                            //Copy other file
-                            IOUtils.copy(is, zos);
+                            // Put file into new zip
+                            zos.putNextEntry(new ZipEntry(name));
+                            InputStream is = zf.getInputStream(ze);
+                            if (name.equalsIgnoreCase("pack.mcmeta")) {
+                                //Convert pack.mcmeta
+                                zos.write(convertPackMeta(is, metaData, description));
+                            } else {
+                                //Copy other file
+                                IOUtils.copy(is, zos);
+                            }
+                            zos.closeEntry();
                         }
-                        zos.closeEntry();
                     }
                 }
             }
-            zos.close();
             Log.info("Converted: %s -> %s", sourcePath, tmpFilePath);
-            FileUtil.syncTmpFile(tmpFilePath, filePath);
+            FileUtil.syncIfNewer(tmpFilePath, filePath);
+            return filePath;
         } catch (Exception e) {
             throw new Exception(String.format("Error converting %s to %s: %s", sourcePath, tmpFilePath, e));
         }

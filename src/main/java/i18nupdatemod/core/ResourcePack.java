@@ -19,18 +19,15 @@ public class ResourcePack {
      * Limit update check frequency
      */
     private static final long UPDATE_TIME_GAP = TimeUnit.DAYS.toMillis(1);
-    private final String filename;
     private final Path filePath;
     private final Path tmpFilePath;
     private String remoteMd5;
 
-    public ResourcePack(String filename) {
-        //If target version is not current version, not save
-        this.filename = filename;
-        this.filePath = FileUtil.getResourcePackPath(filename);
-        this.tmpFilePath = FileUtil.getTemporaryPath(filename);
+    public ResourcePack(Path filePath, Path tmpFilePath) {
+        this.filePath = filePath;
+        this.tmpFilePath = tmpFilePath;
         try {
-            FileUtil.syncTmpFile(filePath, tmpFilePath);
+            FileUtil.syncIfNewer(filePath, tmpFilePath);
         } catch (Exception e) {
             Log.warning(
                     String.format("Error while sync temp file %s <-> %s: %s", filePath, tmpFilePath, e));
@@ -74,7 +71,7 @@ public class ResourcePack {
 
     private void downloadFull(String fileUrl, String md5Url) throws IOException {
         try {
-            Path downloadTmp = FileUtil.getTemporaryPath(filename + ".tmp");
+            Path downloadTmp = tmpFilePath.resolveSibling(tmpFilePath.getFileName().toString() + ".tmp");
             AssetUtil.download(fileUrl, downloadTmp);
             if (!checkMd5(downloadTmp, md5Url)) {
                 throw new IOException("Download MD5 not match");
@@ -87,14 +84,11 @@ public class ResourcePack {
         if (!Files.exists(tmpFilePath)) {
             throw new FileNotFoundException("Tmp file not found.");
         }
-        FileUtil.syncTmpFile(filePath, tmpFilePath);
+        FileUtil.syncIfNewer(filePath, tmpFilePath);
     }
 
     public Path getTmpFilePath() {
         return tmpFilePath;
     }
 
-    public String getFilename() {
-        return filename;
-    }
 }
