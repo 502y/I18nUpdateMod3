@@ -1,3 +1,5 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
 plugins {
     id("java")
     id("com.github.johnrengelman.shadow") version "8.1.1"
@@ -16,8 +18,7 @@ java {
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
 }
-
-tasks.shadowJar {
+fun ShadowJar.configureI18nPackaging() {
     manifest {
         attributes(
             "TweakClass" to "i18nupdatemod.launchwrapper.LaunchWrapperTweaker",
@@ -28,10 +29,50 @@ tasks.shadowJar {
     minimize()
     archiveBaseName.set("I18nUpdateMod")
     relocate("com.google.archivepatcher", "include.com.google.archivepatcher")
+    relocate("org.tukaani.xz", "include.org.tukaani.xz")
+    relocate("com.moandjiezana.toml", "include.com.moandjiezana.toml")
     dependencies {
         include(dependency("net.runelite.archive-patcher:archive-patcher-applier:.*"))
+        include(dependency("org.tukaani:xz:.*"))
+        include(dependency("com.moandjiezana.toml:toml4j:.*"))
     }
     exclude("LICENSE")
+}
+
+tasks.shadowJar {
+    configureI18nPackaging()
+}
+
+tasks.register<ShadowJar>("shadowJarDebug") {
+    from(sourceSets.main.get().output)
+    configurations = listOf(project.configurations.runtimeClasspath.get())
+    archiveClassifier.set("debug")
+    configureI18nPackaging()
+}
+
+mapOf(
+    "Release" to "http://downloader1.meitangdehulu.com:22943/",
+    "Debug" to "https://i18dl.imc.wiki/",
+).forEach { (variant, baseUrl) ->
+    val configFile = layout.buildDirectory.file("generated/buildConfig/$variant/i18n-build.properties")
+    val generateConfig = tasks.register("generate${variant}Config") {
+        inputs.property("assetBaseUrl", baseUrl)
+        outputs.file(configFile)
+        doLast {
+            configFile.get().asFile.apply {
+                parentFile.mkdirs()
+                writeText("assetBaseUrl=$baseUrl\n")
+            }
+        }
+    }
+    val archive = tasks.named<ShadowJar>(if (variant == "Release") "shadowJar" else "shadowJarDebug") {
+        from(generateConfig)
+    }
+    tasks.register("build$variant") {
+        group = "build"
+        description = "Build the ${variant.lowercase()} artifact."
+        dependsOn(archive)
+    }
 }
 
 repositories {
@@ -50,6 +91,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.3")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.3")
     implementation("net.runelite.archive-patcher:archive-patcher-applier:1.2")
+    implementation("org.tukaani:xz:1.10")
+    implementation("com.moandjiezana.toml:toml4j:0.7.2")
     compileOnly("org.jetbrains:annotations:24.1.0")
 
     implementation("net.fabricmc:fabric-loader:0.15.9")
@@ -61,12 +104,12 @@ dependencies {
     implementation("com.google.code.gson:gson:2.11.0")
 
 }
-
 tasks.test {
     useJUnitPlatform()
 }
 
 tasks.processResources {
+    exclude("i18n-build.properties")
     filesMatching("**") {
         expand(
             "version" to project.version,

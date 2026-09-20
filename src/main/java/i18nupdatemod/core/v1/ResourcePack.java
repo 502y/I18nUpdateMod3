@@ -1,8 +1,6 @@
-package i18nupdatemod.core;
+package i18nupdatemod.core.v1;
 
-import i18nupdatemod.util.AssetUtil;
 import i18nupdatemod.util.DigestUtil;
-import i18nupdatemod.util.FileUtil;
 import i18nupdatemod.util.Log;
 
 import java.io.FileNotFoundException;
@@ -27,7 +25,7 @@ public class ResourcePack {
         this.filePath = filePath;
         this.tmpFilePath = tmpFilePath;
         try {
-            FileUtil.syncIfNewer(filePath, tmpFilePath);
+            LegacyFileUtil.syncIfNewer(filePath, tmpFilePath);
         } catch (Exception e) {
             Log.warning(
                     String.format("Error while sync temp file %s <-> %s: %s", filePath, tmpFilePath, e));
@@ -84,7 +82,7 @@ public class ResourcePack {
         if (!Files.exists(tmpFilePath)) {
             throw new FileNotFoundException("Tmp file not found.");
         }
-        FileUtil.syncIfNewer(filePath, tmpFilePath);
+        LegacyFileUtil.syncIfNewer(filePath, tmpFilePath);
     }
 
     public Path getTmpFilePath() {

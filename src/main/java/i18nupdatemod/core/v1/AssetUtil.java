@@ -1,4 +1,5 @@
-package i18nupdatemod.util;
+package i18nupdatemod.core.v1;
+import i18nupdatemod.util.Log;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -26,11 +27,8 @@ public class AssetUtil {
     private static final List<String> MIRRORS;
 
     static {
-        // 镜像地址可以改成服务器下发
         MIRRORS = new ArrayList<>();
         MIRRORS.add("https://raw.githubusercontent.com/");
-        // 此镜像源维护者：502y
-        MIRRORS.add("http://8.137.167.65:64684/");
     }
 
     public static void download(String url, Path localFile) throws IOException, URISyntaxException {

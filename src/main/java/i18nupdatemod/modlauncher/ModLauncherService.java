@@ -39,7 +39,7 @@ public class ModLauncherService implements ITransformationService {
             Log.warning("Minecraft version not found");
             return;
         }
-        I18nUpdateMod.init(minecraftPath.get(), minecraftVersion, "Forge",  ModUtil.getModDomainsFromModsFolder(minecraftPath.get(), minecraftVersion, "Forge"));
+        I18nUpdateMod.init(minecraftPath.get(), minecraftVersion, "Forge", ModUtil.getModsFromModsFolder(minecraftPath.get()));
     }
 
     @Override
