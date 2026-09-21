@@ -1,8 +1,8 @@
 package i18nupdatemod.util;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.moandjiezana.toml.Toml;
 import i18nupdatemod.entity.ModTranslation;
 
@@ -25,6 +25,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class ModUtil {
+    private static final Gson GSON = new Gson();
+
     /**
      * Discover local mod JARs for all loaders, including their nested JARs.
      * This deliberately scans installed candidates rather than a loader's
@@ -133,7 +135,7 @@ public class ModUtil {
 
     private static MetadataRecord parseMetadata(String kind, byte[] bytes) {
         if ("json".equals(kind)) {
-            return parseJsonMetadata(JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)));
+            return parseJsonMetadata(GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), JsonElement.class));
         }
         List<Toml> mods = new Toml().read(new ByteArrayInputStream(bytes)).getTables("mods");
         if (mods == null || mods.isEmpty()) {

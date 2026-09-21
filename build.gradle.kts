@@ -101,7 +101,8 @@ dependencies {
 
     implementation("commons-io:commons-io:2.16.1")
     implementation("org.ow2.asm:asm:9.7")
-    implementation("com.google.code.gson:gson:2.11.0")
+    // Minecraft supplies Gson at runtime; compile against the 1.7.10 API baseline.
+    implementation("com.google.code.gson:gson:2.2.4")
 
 }
 tasks.test {

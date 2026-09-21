@@ -1,9 +1,9 @@
 package i18nupdatemod.core.v2;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import com.google.gson.JsonParser;
 import i18nupdatemod.entity.ModTranslation;
 import i18nupdatemod.util.DigestUtil;
 import i18nupdatemod.util.Log;
@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class ResourcePackDownloader {
+    private static final Gson GSON = new Gson();
     private static final long UPDATE_TIME_GAP = TimeUnit.DAYS.toMillis(1);
     private static final long ICON_UPDATE_TIME_GAP = TimeUnit.DAYS.toMillis(30);
 
@@ -46,7 +47,7 @@ public class ResourcePackDownloader {
     private static Manifest parseManifest(InputStream input) throws IOException {
         final JsonObject json;
         try {
-            JsonElement root = JsonParser.parseReader(new InputStreamReader(input, StandardCharsets.UTF_8));
+            JsonElement root = GSON.fromJson(new InputStreamReader(input, StandardCharsets.UTF_8), JsonElement.class);
             if (root == null || !root.isJsonObject()) {
                 throw new IOException("Manifest root must be an object");
             }
