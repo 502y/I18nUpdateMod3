@@ -14,22 +14,20 @@ import java.util.List;
  */
 public class ModTranslation {
     public String namespace;
-    public List<String> authors;
+    public String author;
     public String displayName;
 
     public final Path source;
     public final List<String> nestedJars;
 
-    public ModTranslation(String namespace, List<String> authors, String displayName,
+    public ModTranslation(String namespace, String author, String displayName,
                           Path source, List<String> nestedJars) {
         this.namespace = namespace;
-        this.authors = authors == null
-                ? null
-                : Collections.unmodifiableList(new ArrayList<>(authors));
+        this.author = author;
         this.displayName = displayName;
         this.source = source;
         this.nestedJars = nestedJars == null
-                ? Collections.<String>emptyList()
+                ? Collections.emptyList()
                 : Collections.unmodifiableList(new ArrayList<>(nestedJars));
     }
 }

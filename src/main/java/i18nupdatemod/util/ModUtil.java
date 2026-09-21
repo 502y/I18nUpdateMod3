@@ -54,7 +54,7 @@ public class ModUtil {
 
         for (Path entry : entries) {
             try {
-                scanArchive(entry, Collections.<String>emptyList(), result);
+                scanArchive(entry, Collections.emptyList(), result);
             } catch (Exception e) {
                 Log.warning("Failed to read mod %s: %s", entry, e);
             }
@@ -84,20 +84,18 @@ public class ModUtil {
 
                 String metadataKind = metadataKind(path);
                 boolean nestedArchive = !entry.isDirectory() && path.toLowerCase().endsWith(".jar");
-                if (metadataKind != null || nestedArchive) {
+                if (metadataKind != null && !entry.isDirectory()) {
+                    boolean rootMetadata = path.indexOf('/') < 0;
+                    if (parsed.metadataPath == null
+                            || (rootMetadata && parsed.metadataPath.indexOf('/') >= 0)) {
+                        parsed.metadataPath = path;
+                        parsed.metadataBytes = readCurrentEntry(jar);
+                    }
+                } else if (nestedArchive) {
                     byte[] bytes = readCurrentEntry(jar);
-                    if (metadataKind != null) {
-                        try {
-                            parseMetadata(parsed.metadata, metadataKind, bytes);
-                        } catch (Exception e) {
-                            Log.warning("Failed to parse metadata %s in %s: %s", path, source, e);
-                        }
-                    }
-                    if (nestedArchive) {
-                        List<String> chain = new ArrayList<>(nestedJars);
-                        chain.add(path);
-                        nestedArchives.add(new NestedArchive(bytes, chain, path));
-                    }
+                    List<String> chain = new ArrayList<>(nestedJars);
+                    chain.add(path);
+                    nestedArchives.add(new NestedArchive(bytes, chain, path));
                 }
             }
         }
@@ -113,137 +111,66 @@ public class ModUtil {
     }
 
     private static void addTranslations(ParsedMod parsed, List<ModTranslation> output) {
+        MetadataRecord metadata = null;
+        if (parsed.metadataPath != null) {
+            try {
+                metadata = parseMetadata(metadataKind(parsed.metadataPath), parsed.metadataBytes);
+            } catch (Exception e) {
+                Log.warning("Failed to parse metadata %s in %s: %s", parsed.metadataPath, parsed.source, e);
+            }
+        }
         List<String> namespaces = new ArrayList<>(parsed.namespaces);
         Collections.sort(namespaces);
         for (String namespace : namespaces) {
-            MetadataRecord metadata = chooseMetadata(parsed, namespace);
             output.add(new ModTranslation(
                     namespace,
-                    metadata == null ? null : metadata.authors,
+                    metadata == null ? null : metadata.author,
                     metadata == null ? null : metadata.displayName,
                     parsed.source,
                     parsed.nestedJars));
         }
     }
 
-    private static MetadataRecord chooseMetadata(ParsedMod parsed, String namespace) {
-        List<MetadataRecord> exact = new ArrayList<>();
-        for (MetadataRecord record : parsed.metadata) {
-            if (record.ownerIds.contains(namespace)) {
-                exact.add(record);
-            }
-        }
-        if (!exact.isEmpty()) {
-            return mergeMetadata(exact);
-        }
-
-        // A single metadata document and a single discovered namespace are an
-        // unambiguous owner even when a loader uses an alias for its mod id.
-        if (parsed.metadata.size() == 1 && parsed.namespaces.size() == 1) {
-            return parsed.metadata.get(0);
-        }
-        return null;
-    }
-
-    private static MetadataRecord mergeMetadata(List<MetadataRecord> records) {
-        MetadataRecord merged = new MetadataRecord();
-        for (MetadataRecord record : records) {
-            for (String ownerId : record.ownerIds) {
-                if (!merged.ownerIds.contains(ownerId)) {
-                    merged.ownerIds.add(ownerId);
-                }
-            }
-            merged.displayName = mergeString(merged.displayName, record.displayName);
-            merged.authors = mergeAuthors(merged.authors, record.authors);
-        }
-        return merged;
-    }
-
-    private static String mergeString(String left, String right) {
-        if (left == null) {
-            return right;
-        }
-        if (right == null || left.equals(right)) {
-            return left;
-        }
-        return null;
-    }
-
-    private static List<String> mergeAuthors(List<String> left, List<String> right) {
-        if (left == null) {
-            return right;
-        }
-        if (right == null || left.equals(right)) {
-            return left;
-        }
-        return null;
-    }
-
-    private static void parseMetadata(List<MetadataRecord> records, String kind, byte[] bytes) {
+    private static MetadataRecord parseMetadata(String kind, byte[] bytes) {
         if ("json".equals(kind)) {
-            parseJsonMetadata(records, bytes);
-        } else {
-            parseTomlMetadata(records, bytes);
+            return parseJsonMetadata(JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)));
         }
+        List<Toml> mods = new Toml().read(new ByteArrayInputStream(bytes)).getTables("mods");
+        if (mods == null || mods.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> values = mods.get(0).toMap();
+        MetadataRecord record = new MetadataRecord();
+        record.displayName = firstValueString(values, "displayName", "name");
+        record.author = authorValue(values.get("authors"));
+        return record;
     }
 
-    private static void parseJsonMetadata(List<MetadataRecord> records, byte[] bytes) {
-        JsonElement root = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8));
-        collectJsonRecords(records, root);
-    }
-
-    private static void collectJsonRecords(List<MetadataRecord> records, JsonElement element) {
+    private static MetadataRecord parseJsonMetadata(JsonElement element) {
         if (element == null || element.isJsonNull()) {
-            return;
+            return null;
         }
         if (element.isJsonArray()) {
             for (JsonElement child : element.getAsJsonArray()) {
-                collectJsonRecords(records, child);
+                MetadataRecord record = parseJsonMetadata(child);
+                if (record != null) {
+                    return record;
+                }
             }
-            return;
+            return null;
         }
         if (!element.isJsonObject()) {
-            return;
+            return null;
         }
-
         JsonObject object = element.getAsJsonObject();
         JsonElement modList = object.get("modList");
         if (modList != null && modList.isJsonArray()) {
-            collectJsonRecords(records, modList);
-            return;
+            return parseJsonMetadata(modList);
         }
-
         MetadataRecord record = new MetadataRecord();
-        addOwner(record.ownerIds, stringValue(object.get("modid")));
-        addOwner(record.ownerIds, stringValue(object.get("modId")));
-        addOwner(record.ownerIds, stringValue(object.get("id")));
-        JsonElement provides = object.get("provides");
-        if (provides != null && provides.isJsonArray()) {
-            for (JsonElement provided : provides.getAsJsonArray()) {
-                addOwner(record.ownerIds, stringValue(provided));
-            }
-        }
-
         record.displayName = firstString(object, "displayName", "name");
-        record.authors = firstAuthors(object, "authors", "authorList");
-        records.add(record);
-    }
-
-    private static void parseTomlMetadata(List<MetadataRecord> records, byte[] bytes) {
-        Toml root = new Toml().read(new ByteArrayInputStream(bytes));
-        List<Toml> mods = root.getTables("mods");
-        if (mods == null) {
-            return;
-        }
-        for (Toml mod : mods) {
-            Map<String, Object> values = mod.toMap();
-            MetadataRecord record = new MetadataRecord();
-            addOwner(record.ownerIds, valueString(values.get("modId")));
-            addOwner(record.ownerIds, valueString(values.get("modid")));
-            record.displayName = firstValueString(values, "displayName", "name");
-            record.authors = authorsValue(values.get("authors"));
-            records.add(record);
-        }
+        record.author = firstAuthor(object, "authors", "authorList");
+        return record;
     }
 
     private static String firstString(JsonObject object, String first, String second) {
@@ -251,63 +178,55 @@ public class ModUtil {
         return value == null ? stringValue(object.get(second)) : value;
     }
 
-    private static List<String> firstAuthors(JsonObject object, String first, String second) {
+    private static String firstAuthor(JsonObject object, String first, String second) {
         JsonElement value = object.get(first);
         if (value != null) {
-            return authorsJson(value);
+            return authorJson(value);
         }
-        return authorsJson(object.get(second));
+        return authorJson(object.get(second));
     }
 
-    private static List<String> authorsJson(JsonElement value) {
+    private static String authorJson(JsonElement value) {
         if (value == null || value.isJsonNull()) {
             return null;
         }
-        List<String> authors = new ArrayList<>();
+        String selected = null;
         if (value.isJsonArray()) {
             for (JsonElement author : value.getAsJsonArray()) {
-                if (author != null && author.isJsonObject()) {
-                    addAuthor(authors, stringValue(author.getAsJsonObject().get("name")));
-                } else {
-                    addAuthor(authors, stringValue(author));
-                }
+                String name = author != null && author.isJsonObject()
+                        ? stringValue(author.getAsJsonObject().get("name")) : stringValue(author);
+                selected = minAuthor(selected, name);
             }
         } else {
-            addAuthor(authors, stringValue(value));
+            selected = minAuthor(null, stringValue(value));
         }
-        return authors;
+        return selected;
     }
 
-    private static List<String> authorsValue(Object value) {
+    private static String authorValue(Object value) {
         if (value == null) {
             return null;
         }
-        List<String> authors = new ArrayList<>();
+        String selected = null;
         if (value instanceof Iterable) {
             for (Object author : (Iterable<?>) value) {
-                if (author instanceof Map) {
-                    addAuthor(authors, valueString(((Map<?, ?>) author).get("name")));
-                } else {
-                    addAuthor(authors, valueString(author));
-                }
+                String name = author instanceof Map
+                        ? valueString(((Map<?, ?>) author).get("name")) : valueString(author);
+                selected = minAuthor(selected, name);
             }
         } else {
-            addAuthor(authors, valueString(value));
+            selected = minAuthor(null, valueString(value));
         }
-        return authors;
+        return selected;
     }
 
-    private static void addAuthor(List<String> authors, String author) {
-        if (author != null && !author.isEmpty() && !authors.contains(author)) {
-            authors.add(author);
+    private static String minAuthor(String selected, String candidate) {
+        if (candidate == null || candidate.isEmpty()) {
+            return selected;
         }
+        return selected == null || candidate.compareTo(selected) < 0 ? candidate : selected;
     }
 
-    private static void addOwner(List<String> ownerIds, String ownerId) {
-        if (ownerId != null && !ownerId.isEmpty() && !ownerIds.contains(ownerId)) {
-            ownerIds.add(ownerId);
-        }
-    }
 
     private static String stringValue(JsonElement element) {
         if (element == null || element.isJsonNull() || !element.isJsonPrimitive()
@@ -365,14 +284,16 @@ public class ModUtil {
 
     private static String metadataKind(String path) {
         String normalized = path == null ? "" : path.toLowerCase();
-        if ("mcmod.info".equals(normalized) || "meta-inf/mcmod.info".equals(normalized)) {
-            return "json";
+        if (normalized.startsWith("meta-inf/")) {
+            normalized = normalized.substring("meta-inf/".length());
         }
-        if ("fabric.mod.json".equals(normalized)) {
-            return "json";
-        }
-        if ("meta-inf/mods.toml".equals(normalized) || "meta-inf/neoforge.mods.toml".equals(normalized)) {
-            return "toml";
+        switch (normalized) {
+            case "mcmod.info":
+            case "fabric.mod.json":
+                return "json";
+            case "mods.toml":
+            case "neoforge.mods.toml":
+                return "toml";
         }
         return null;
     }
@@ -393,7 +314,8 @@ public class ModUtil {
         final Path source;
         final List<String> nestedJars;
         final Set<String> namespaces = new LinkedHashSet<>();
-        final List<MetadataRecord> metadata = new ArrayList<>();
+        String metadataPath;
+        byte[] metadataBytes;
 
         ParsedMod(Path source, List<String> nestedJars) {
             this.source = source;
@@ -414,8 +336,7 @@ public class ModUtil {
     }
 
     private static class MetadataRecord {
-        final List<String> ownerIds = new ArrayList<>();
-        List<String> authors;
+        String author;
         String displayName;
     }
 }

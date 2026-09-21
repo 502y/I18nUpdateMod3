@@ -1,8 +1,8 @@
 package i18nupdatemod.core.v2;
 
+import org.jetbrains.annotations.NotNull;
 import org.tukaani.xz.LZMAInputStream;
 
-import java.io.FileInputStream;
 import java.io.FilterInputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
@@ -148,7 +148,7 @@ public final class TranslationArchive {
 
     private static LocalInputStream openInput(Path archive) throws IOException {
         try {
-            return new LocalInputStream(new FileInputStream(archive.toFile()));
+            return new LocalInputStream(Files.newInputStream(archive.toFile().toPath()));
         } catch (IOException e) {
             throw wrapLocal("Cannot open translation archive: " + archive, e);
         }
@@ -250,7 +250,7 @@ public final class TranslationArchive {
         @Override
         public void write(byte[] bytes, int offset, int length) throws IOException {
             try {
-                super.write(bytes, offset, length);
+                out.write(bytes, offset, length);
             } catch (IOException e) {
                 throw wrapLocal("Cannot write decoded translation archive", e);
             }
@@ -332,8 +332,8 @@ public final class TranslationArchive {
         return decodeUtf8(header, offset, nul - offset);
     }
 
-    private static String normalizeTarPath(String path) throws IOException {
-        if (path == null || path.length() == 0 || path.indexOf('\0') >= 0
+    private static String normalizeTarPath(String path, boolean directory) throws IOException {
+        if (path == null || path.isEmpty() || path.indexOf('\0') >= 0
                 || path.indexOf('\\') >= 0 || path.startsWith("/")
                 || path.startsWith("\\") || path.indexOf(':') >= 0) {
             throw new IOException("Unsafe tar path: " + path);
@@ -342,7 +342,7 @@ public final class TranslationArchive {
         String[] pieces = path.split("/", -1);
         StringBuilder normalized = new StringBuilder(path.length());
         for (String piece : pieces) {
-            if (piece.length() == 0 || ".".equals(piece)) {
+            if (piece.isEmpty() || ".".equals(piece)) {
                 continue;
             }
             if ("..".equals(piece)) {
@@ -353,7 +353,7 @@ public final class TranslationArchive {
             }
             normalized.append(piece);
         }
-        if (normalized.length() == 0) {
+        if (normalized.length() == 0 && !directory) {
             throw new IOException("Empty tar path: " + path);
         }
         return normalized.toString();
@@ -424,7 +424,7 @@ public final class TranslationArchive {
         byte[] buffer = new byte[COPY_BUFFER_SIZE];
         long remaining = amount;
         while (remaining > 0) {
-            int requested = (int) Math.min((long) buffer.length, remaining);
+            int requested = (int) Math.min(buffer.length, remaining);
             int count = input.read(buffer, 0, requested);
             if (count < 0) {
                 throw new IOException("Truncated tar entry");
@@ -478,7 +478,7 @@ public final class TranslationArchive {
             verifyChecksum(entryHeader);
             String headerName = decodeTarString(entryHeader, 0, 100);
             String prefix = decodeTarString(entryHeader, 345, 155);
-            if (prefix.length() > 0) {
+            if (!prefix.isEmpty()) {
                 headerName = prefix + "/" + headerName;
             }
             long headerSize = parseTarNumber(entryHeader, 124, 12, "size");
@@ -515,7 +515,7 @@ public final class TranslationArchive {
             if (path == null) {
                 path = headerName;
             }
-            String normalizedPath = normalizeTarPath(path);
+            String normalizedPath = normalizeTarPath(path, type == '5');
             long size = localPax.size != null ? localPax.size
                     : (globalPax.size != null ? globalPax.size : headerSize);
             if (size < 0) {
@@ -529,12 +529,15 @@ public final class TranslationArchive {
                     skipFully(input, size);
                 }
                 skipPadding(input, size);
-                if (!zipName.endsWith("/")) {
-                    zipName += "/";
+                // TAR commonly includes "." or "./" for its root directory.
+                if (!normalizedPath.isEmpty()) {
+                    if (!zipName.endsWith("/")) {
+                        zipName += "/";
+                    }
+                    requireZipNameLength(zipName);
+                    output.putNextEntry(new ZipEntry(zipName));
+                    output.closeEntry();
                 }
-                requireZipNameLength(zipName);
-                output.putNextEntry(new ZipEntry(zipName));
-                output.closeEntry();
             } else {
                 if (path.endsWith("/")) {
                     throw new IOException("Regular tar entry has a directory path");
@@ -551,7 +554,7 @@ public final class TranslationArchive {
         private void copyEntry(long size) throws IOException {
             long remaining = size;
             while (remaining > 0) {
-                int requested = (int) Math.min((long) copyBuffer.length, remaining);
+                int requested = (int) Math.min(copyBuffer.length, remaining);
                 int count = input.read(copyBuffer, 0, requested);
                 if (count < 0) {
                     throw new IOException("Truncated tar entry");
@@ -700,7 +703,7 @@ public final class TranslationArchive {
         }
 
         private static long parseDecimalString(String value, String description) throws IOException {
-            if (value.length() == 0) {
+            if (value.isEmpty()) {
                 throw new IOException("Empty " + description);
             }
             long result = 0;

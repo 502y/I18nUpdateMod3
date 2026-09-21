@@ -120,7 +120,7 @@ public class ResourcePackDownloader {
             String namespace = resolveNamespace(mod, rules.get(rawNamespace));
             if (selected.containsKey(namespace)) {
                 // 太多了，没事别看
-                Log.debug("Duplicate namespace %s, rawNamespace %s", namespace, rawNamespace);
+                //Log.debug("Duplicate namespace %s, rawNamespace %s", namespace, rawNamespace);
                 continue;
             }
             selected.put(namespace, rawNamespace);
@@ -228,8 +228,7 @@ public class ResourcePackDownloader {
         try {
             String value;
             if ("author".equals(identifier)) {
-                value = mod.authors == null || mod.authors.isEmpty()
-                        ? null : Collections.min(mod.authors);
+                value = mod.author;
             } else if ("displayName".equals(identifier)) {
                 value = mod.displayName;
             } else {
