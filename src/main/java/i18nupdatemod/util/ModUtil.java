@@ -61,7 +61,20 @@ public class ModUtil {
                 Log.warning("Failed to read mod %s: %s", entry, e);
             }
         }
+        printMods(result);
         return result;
+    }
+
+    private static void printMods(List<ModTranslation> result) {
+        StringBuilder mods = new StringBuilder("Found mods: [");
+        for (int i = 0; i < result.size(); i++) {
+            mods.append(result.get(i).displayName);
+            if (i != result.size() - 1) {
+                mods.append(", ");
+            }
+        }
+        mods.append("]");
+        Log.info(mods.toString());
     }
 
     private static void scanArchive(Path source, List<String> nestedJars,
