@@ -19,7 +19,8 @@ import java.util.*;
 
 import static i18nupdatemod.I18nUpdateMod.GSON;
 
-//1.13-latest
+//MinecraftForge: 1.13-latest
+//NeoForge: 1.20.1-1.21.8
 public class ModLauncherService implements ITransformationService {
     @Override
     public @NotNull String name() {
@@ -59,7 +60,7 @@ public class ModLauncherService implements ITransformationService {
 
     private String getMinecraftVersion() {
         // MinecraftForge 1.13~1.20.2
-        // NeoForge 1.20.1~
+        // NeoForge 1.20.1~1.21.8
         try {
             String[] args = (String[]) Reflection.clazz(Launcher.INSTANCE).get("argumentHandler").get("args").get();
             for (int i = 0; i < args.length - 1; ++i) {

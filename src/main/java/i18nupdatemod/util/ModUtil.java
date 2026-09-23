@@ -66,9 +66,9 @@ public class ModUtil {
     }
 
     private static void printMods(List<ModTranslation> result) {
-        StringBuilder mods = new StringBuilder("Found mods: [");
+        StringBuilder mods = new StringBuilder("Found resource namespaces: [");
         for (int i = 0; i < result.size(); i++) {
-            mods.append(result.get(i).displayName);
+            mods.append(result.get(i).namespace);
             if (i != result.size() - 1) {
                 mods.append(", ");
             }

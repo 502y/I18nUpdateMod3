@@ -11,12 +11,14 @@ group = "i18nupdatemod"
 version = project.properties["version"].toString() + if ("false" == System.getenv("IS_SNAPSHOT")) "" else "-SNAPSHOT"
 
 java {
+    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
+    options.release.set(8)
 }
 fun ShadowJar.configureI18nPackaging() {
     manifest {
@@ -80,6 +82,7 @@ repositories {
     maven("https://libraries.minecraft.net/")
     maven("https://maven.fabricmc.net/")
     maven("https://files.minecraftforge.net/maven")
+    maven("https://maven.neoforged.net/releases/")
     maven("https://repo.runelite.net/")
 }
 
@@ -94,6 +97,12 @@ dependencies {
     implementation("org.tukaani:xz:1.10")
     implementation("com.moandjiezana.toml:toml4j:0.7.2")
     compileOnly("org.jetbrains:annotations:24.1.0")
+    // Only the early-service interface is linked; never bundle loader implementation classes.
+    compileOnly("net.neoforged.fancymodloader:loader:10.0.34") {
+        attributes {
+            attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21)
+        }
+    }
 
     implementation("net.fabricmc:fabric-loader:0.15.9")
     implementation("cpw.mods:modlauncher:8.1.3")

@@ -6,6 +6,7 @@ import i18nupdatemod.core.GameConfig;
 import i18nupdatemod.core.ResourcePackUpdater;
 import i18nupdatemod.entity.ModTranslation;
 import i18nupdatemod.util.Log;
+import i18nupdatemod.util.Version;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
@@ -49,8 +50,6 @@ public class I18nUpdateMod {
         } catch (ClassNotFoundException ignored) {
         }
 
-        int minecraftMajorVersion = Integer.parseInt(minecraftVersion.split("\\.")[1]);
-
         try {
             Path resourcePackDirectory = minecraftPath.resolve("resourcepacks");
             Path cacheRoot = Paths.get(localStorage, "." + MOD_ID);
@@ -60,7 +59,8 @@ public class I18nUpdateMod {
             //Apply resource pack
             GameConfig config = new GameConfig(minecraftPath.resolve("options.txt"));
             config.addResourcePack("Minecraft-Mod-Language-Modpack",
-                    (minecraftMajorVersion <= 12 ? "" : "file/") + convertedPack.getFileName().toString());
+                    (Version.from(minecraftVersion).compareTo(Version.from("1.13")) < 0 ? "" : "file/")
+                            + convertedPack.getFileName().toString());
             config.writeToFile();
         } catch (Exception e) {
             Log.warning(String.format("Failed to update resource pack: %s", e));
