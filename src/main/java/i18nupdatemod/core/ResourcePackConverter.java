@@ -7,6 +7,7 @@ import i18nupdatemod.util.FileUtil;
 import i18nupdatemod.util.Log;
 import org.apache.commons.io.IOUtils;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -99,7 +100,23 @@ public class ResourcePackConverter {
         meta.pack.min_format = metaData.useNewFormat() ? metaData.minFormat : null;
         meta.pack.max_format = metaData.useNewFormat() ? metaData.maxFormat : null;
         meta.pack.description = description;
-        return GSON.toJson(meta).getBytes(StandardCharsets.UTF_8);
+        // Older clients read pack.mcmeta using the default charset, not UTF-8.
+        // ASCII JSON escapes also work on snapshots without version-specific checks.
+        String json = GSON.toJson(meta);
+        ByteArrayOutputStream output = new ByteArrayOutputStream(json.length());
+        for (int i = 0; i < json.length(); i++) {
+            char character = json.charAt(i);
+            if (character <= 0x7F) {
+                output.write(character);
+            } else {
+                output.write('\\');
+                output.write('u');
+                for (int shift = 12; shift >= 0; shift -= 4) {
+                    output.write(Character.forDigit((character >>> shift) & 0xF, 16));
+                }
+            }
+        }
+        return output.toByteArray();
     }
 
     private static class PackMeta {
