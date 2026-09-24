@@ -51,4 +51,6 @@ public class GameConfig {
         Log.info(String.format("Resource Packs: %s", configs.get("resourcePacks")));
 //        configs.put("lang", "zh_cn");
     }
+
 }
+

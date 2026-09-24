@@ -32,11 +32,12 @@ fun ShadowJar.configureI18nPackaging() {
     archiveBaseName.set("I18nUpdateMod")
     relocate("com.google.archivepatcher", "include.com.google.archivepatcher")
     relocate("org.tukaani.xz", "include.org.tukaani.xz")
-    relocate("com.moandjiezana.toml", "include.com.moandjiezana.toml")
+    relocate("com.electronwill.nightconfig", "include.com.electronwill.nightconfig")
     dependencies {
         include(dependency("net.runelite.archive-patcher:archive-patcher-applier:.*"))
         include(dependency("org.tukaani:xz:.*"))
-        include(dependency("com.moandjiezana.toml:toml4j:.*"))
+        include(dependency("com.electronwill.night-config:core:.*"))
+        include(dependency("com.electronwill.night-config:toml:.*"))
     }
     exclude("LICENSE")
 }
@@ -93,9 +94,16 @@ configurations.configureEach {
 dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.3")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.3")
+    // Transitive resolution is disabled, including for the test configurations.
+    testImplementation("org.apiguardian:apiguardian-api:1.1.2")
+    testImplementation("org.opentest4j:opentest4j:1.3.0")
+    testImplementation("org.junit.platform:junit-platform-commons:1.10.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-engine:1.10.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.3")
     implementation("net.runelite.archive-patcher:archive-patcher-applier:1.2")
     implementation("org.tukaani:xz:1.10")
-    implementation("com.moandjiezana.toml:toml4j:0.7.2")
+    implementation("com.electronwill.night-config:core:3.6.7")
+    implementation("com.electronwill.night-config:toml:3.6.7")
     compileOnly("org.jetbrains:annotations:24.1.0")
     // Only the early-service interface is linked; never bundle loader implementation classes.
     compileOnly("net.neoforged.fancymodloader:loader:10.0.34") {

@@ -13,6 +13,7 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -26,15 +27,26 @@ import java.nio.file.StandardCopyOption;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ResourcePackDownloader {
     private static final Gson GSON = new Gson();
     private static final long UPDATE_TIME_GAP = TimeUnit.DAYS.toMillis(1);
     private static final long ICON_UPDATE_TIME_GAP = TimeUnit.DAYS.toMillis(30);
+    private static final int MAX_CONCURRENT_DOWNLOADS = 16;
 
     public static Manifest loadManifest(String baseUrl, String version) throws IOException {
         String root = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
@@ -152,7 +164,8 @@ public class ResourcePackDownloader {
         deleteBlacklisted(modCache, blocked);
 
         String versionUrl = root + encode(version) + "/";
-        List<Path> sourcePaths = new ArrayList<>();
+        List<DownloadRequest> requests = new ArrayList<>();
+        Map<String, ReentrantLock> cacheLocks = new HashMap<>();
         for (Map.Entry<String, String> entry : namespaces.entrySet()) {
             String namespace = entry.getKey();
             String rawNamespace = entry.getValue();
@@ -163,28 +176,184 @@ public class ResourcePackDownloader {
 
             Path cached = modCache.resolve(encode(namespace) + ".zip");
             Path md5File = modCache.resolve(encode(namespace) + ".md5");
-            String assetUrl = versionUrl + "assets/" + encode(namespace);
-            try {
-                updateMod(assetUrl, rawNamespace, cached, md5File);
-            } catch (HttpStatusException e) {
-                if (e.status == 404 || e.status == 410) {
-                    // 太多了，没事别看（
-                    //Log.debug("No exact translation asset for %s/%s; keeping local cache if present", version, namespace);
-                } else {
-                    Log.warning("Translation asset %s/%s returned HTTP %s; aborting new pipeline",
-                            version, namespace, e.status);
-                    throw e;
-                }
-            } catch (AssetFailure e) {
-                Log.warning("Failed to update translation %s; keeping local cache if present: %s",
-                        namespace, e.getMessage());
+            String cacheKey = cached.toAbsolutePath().normalize().toString().toLowerCase(Locale.ROOT);
+            ReentrantLock cacheLock = cacheLocks.get(cacheKey);
+            if (cacheLock == null) {
+                cacheLock = new ReentrantLock();
+                cacheLocks.put(cacheKey, cacheLock);
             }
-            if (Files.isRegularFile(cached)) {
-                sourcePaths.add(cached);
+            String assetUrl = versionUrl + "assets/" + encode(namespace);
+            requests.add(new DownloadRequest(
+                    version, namespace, rawNamespace, cached, md5File, assetUrl, cacheLock));
+        }
+        if (requests.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        ExecutorService executor = Executors.newFixedThreadPool(
+                Math.min(MAX_CONCURRENT_DOWNLOADS, requests.size()),
+                downloadThreadFactory());
+        CompletionService<Path> completions = new ExecutorCompletionService<>(executor);
+        List<Future<Path>> futures = new ArrayList<>(requests.size());
+        List<Path> sourcePaths = new ArrayList<>(requests.size());
+        try {
+            for (DownloadRequest request : requests) {
+                futures.add(completions.submit(() -> downloadOne(request)));
+            }
+            executor.shutdown();
+
+            for (int completed = 0; completed < requests.size(); completed++) {
+                Path source = completions.take().get();
+                if (source != null) {
+                    sourcePaths.add(source);
+                }
+            }
+            awaitTermination(executor);
+
+            return sourcePaths;
+        } catch (InterruptedException e) {
+            cancelAndJoin(executor, futures);
+            Thread.currentThread().interrupt();
+            InterruptedIOException interrupted = new InterruptedIOException(
+                    "Interrupted while downloading translations");
+            interrupted.initCause(e);
+            throw interrupted;
+        } catch (ExecutionException e) {
+            cancelAndJoin(executor, futures);
+            return rethrowTaskFailure(e.getCause());
+        } catch (RuntimeException e) {
+            cancelAndJoin(executor, futures);
+            throw e;
+        } catch (Error e) {
+            cancelAndJoin(executor, futures);
+            throw e;
+        }
+    }
+
+    private static Path downloadOne(DownloadRequest request)
+            throws IOException, NoSuchAlgorithmException {
+        ensureWorkerNotInterrupted();
+        try {
+            request.cacheLock.lockInterruptibly();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            InterruptedIOException interrupted = new InterruptedIOException(
+                    "Interrupted while waiting for translation cache");
+            interrupted.initCause(e);
+            throw interrupted;
+        }
+        try {
+            return downloadOneLocked(request);
+        } finally {
+            request.cacheLock.unlock();
+        }
+    }
+
+    private static Path downloadOneLocked(DownloadRequest request)
+            throws IOException, NoSuchAlgorithmException {
+        ensureWorkerNotInterrupted();
+        try {
+            updateMod(request.assetUrl, request.rawNamespace, request.cached, request.md5File);
+        } catch (HttpStatusException e) {
+            if (e.status == 404 || e.status == 410) {
+                // 太多了，没事别看（
+                //Log.debug("No exact translation asset for %s/%s; keeping local cache if present", version, namespace);
+            } else {
+                Log.warning("Translation asset %s/%s returned HTTP %s; aborting new pipeline",
+                        request.version, request.namespace, e.status);
+                throw e;
+            }
+        } catch (AssetFailure e) {
+            Log.warning("Failed to update translation %s; keeping local cache if present: %s",
+                    request.namespace, e.getMessage());
+        }
+        ensureWorkerNotInterrupted();
+        return Files.isRegularFile(request.cached) ? request.cached : null;
+    }
+
+    private static void ensureWorkerNotInterrupted() throws InterruptedIOException {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedIOException("Translation download interrupted");
+        }
+    }
+
+    private static ThreadFactory downloadThreadFactory() {
+        return new ThreadFactory() {
+            private int nextId;
+
+            @Override
+            public synchronized Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable,
+                        "i18nupdatemod-v2-download-" + (++nextId));
+                thread.setDaemon(false);
+                return thread;
+            }
+        };
+    }
+
+    private static void awaitTermination(ExecutorService executor) throws InterruptedException {
+        while (!executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS)) {
+            // A fixed executor with a finite submission set eventually terminates.
+        }
+    }
+
+    private static void cancelAndJoin(ExecutorService executor,
+                                      List<? extends Future<?>> futures) {
+        for (Future<?> future : futures) {
+            future.cancel(true);
+        }
+        executor.shutdownNow();
+        boolean interrupted = false;
+        while (!executor.isTerminated()) {
+            try {
+                executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                interrupted = true;
             }
         }
-        return sourcePaths;
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
+
+    private static List<Path> rethrowTaskFailure(Throwable failure)
+            throws IOException, NoSuchAlgorithmException {
+        if (failure instanceof IOException) {
+            throw (IOException) failure;
+        }
+        if (failure instanceof NoSuchAlgorithmException) {
+            throw (NoSuchAlgorithmException) failure;
+        }
+        if (failure instanceof RuntimeException) {
+            throw (RuntimeException) failure;
+        }
+        if (failure instanceof Error) {
+            throw (Error) failure;
+        }
+        throw new IOException("Translation download failed", failure);
+    }
+
+    private static final class DownloadRequest {
+        final String version;
+        final String namespace;
+        final String rawNamespace;
+        final Path cached;
+        final Path md5File;
+        final String assetUrl;
+        final ReentrantLock cacheLock;
+
+        DownloadRequest(String version, String namespace, String rawNamespace, Path cached,
+                        Path md5File, String assetUrl, ReentrantLock cacheLock) {
+            this.version = version;
+            this.namespace = namespace;
+            this.rawNamespace = rawNamespace;
+            this.cached = cached;
+            this.md5File = md5File;
+            this.assetUrl = assetUrl;
+            this.cacheLock = cacheLock;
+        }
+    }
+
 
     public static Path downloadIcon(String baseUrl, String version, Path cacheRoot) {
         Path cached = cacheRoot.resolve("shared").resolve("pack.png");

@@ -3,7 +3,8 @@ package i18nupdatemod.util;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.moandjiezana.toml.Toml;
+import com.electronwill.nightconfig.core.UnmodifiableConfig;
+import com.electronwill.nightconfig.toml.TomlParser;
 import i18nupdatemod.entity.ModTranslation;
 
 import java.io.ByteArrayInputStream;
@@ -150,11 +151,11 @@ public class ModUtil {
         if ("json".equals(kind)) {
             return parseJsonMetadata(GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), JsonElement.class));
         }
-        List<Toml> mods = new Toml().read(new ByteArrayInputStream(bytes)).getTables("mods");
+        List<UnmodifiableConfig> mods = new TomlParser().parse(new ByteArrayInputStream(bytes)).get("mods");
         if (mods == null || mods.isEmpty()) {
             return null;
         }
-        Map<String, Object> values = mods.get(0).toMap();
+        Map<String, Object> values = mods.get(0).valueMap();
         MetadataRecord record = new MetadataRecord();
         record.displayName = firstValueString(values, "displayName", "name");
         record.author = authorValue(values.get("authors"));
@@ -225,8 +226,8 @@ public class ModUtil {
         String selected = null;
         if (value instanceof Iterable) {
             for (Object author : (Iterable<?>) value) {
-                String name = author instanceof Map
-                        ? valueString(((Map<?, ?>) author).get("name")) : valueString(author);
+                String name = author instanceof UnmodifiableConfig
+                        ? valueString(((UnmodifiableConfig) author).get("name")) : valueString(author);
                 selected = minAuthor(selected, name);
             }
         } else {
