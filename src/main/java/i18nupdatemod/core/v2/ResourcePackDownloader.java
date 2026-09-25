@@ -46,7 +46,7 @@ public class ResourcePackDownloader {
     private static final Gson GSON = new Gson();
     private static final long UPDATE_TIME_GAP = TimeUnit.DAYS.toMillis(1);
     private static final long ICON_UPDATE_TIME_GAP = TimeUnit.DAYS.toMillis(30);
-    private static final int MAX_CONCURRENT_DOWNLOADS = 16;
+    private static final int MAX_CONCURRENT_DOWNLOADS = 64;
 
     public static Manifest loadManifest(String baseUrl, String version) throws IOException {
         String root = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";

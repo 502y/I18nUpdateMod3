@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import i18nupdatemod.core.GameConfig;
 import i18nupdatemod.core.ResourcePackUpdater;
+import i18nupdatemod.core.RuntimePackActivation;
 import i18nupdatemod.entity.ModTranslation;
 import i18nupdatemod.util.Log;
 import i18nupdatemod.util.Version;
@@ -55,6 +56,12 @@ public class I18nUpdateMod {
             Path cacheRoot = Paths.get(localStorage, "." + MOD_ID);
             Path convertedPack = ResourcePackUpdater.update(
                     minecraftVersion, loader, mods, resourcePackDirectory, cacheRoot);
+
+            // NeoForge applies the selection after its resource repository is populated.
+            if (RuntimePackActivation.isEnabled()) {
+                RuntimePackActivation.prepare(minecraftPath, convertedPack);
+                return;
+            }
 
             //Apply resource pack
             GameConfig config = new GameConfig(minecraftPath.resolve("options.txt"));

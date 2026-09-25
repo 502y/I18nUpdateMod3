@@ -151,15 +151,7 @@ public class ModUtil {
         if ("json".equals(kind)) {
             return parseJsonMetadata(GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), JsonElement.class));
         }
-        List<UnmodifiableConfig> mods = new TomlParser().parse(new ByteArrayInputStream(bytes)).get("mods");
-        if (mods == null || mods.isEmpty()) {
-            return null;
-        }
-        Map<String, Object> values = mods.get(0).valueMap();
-        MetadataRecord record = new MetadataRecord();
-        record.displayName = firstValueString(values, "displayName", "name");
-        record.author = authorValue(values.get("authors"));
-        return record;
+        return TomlMetadata.parse(bytes);
     }
 
     private static MetadataRecord parseJsonMetadata(JsonElement element) {
@@ -219,21 +211,37 @@ public class ModUtil {
         return selected;
     }
 
-    private static String authorValue(Object value) {
-        if (value == null) {
-            return null;
-        }
-        String selected = null;
-        if (value instanceof Iterable) {
-            for (Object author : (Iterable<?>) value) {
-                String name = author instanceof UnmodifiableConfig
-                        ? valueString(((UnmodifiableConfig) author).get("name")) : valueString(author);
-                selected = minAuthor(selected, name);
+    // Loaded only for TOML metadata. Keep every NightConfig type reference here
+    // so old Forge and Fabric can scan JSON without a TOML library present.
+    private static final class TomlMetadata {
+        private static MetadataRecord parse(byte[] bytes) {
+            List<UnmodifiableConfig> mods = new TomlParser().parse(new ByteArrayInputStream(bytes)).get("mods");
+            if (mods == null || mods.isEmpty()) {
+                return null;
             }
-        } else {
-            selected = minAuthor(null, valueString(value));
+            Map<String, Object> values = mods.get(0).valueMap();
+            MetadataRecord record = new MetadataRecord();
+            record.displayName = firstValueString(values, "displayName", "name");
+            record.author = authorValue(values.get("authors"));
+            return record;
         }
-        return selected;
+
+        private static String authorValue(Object value) {
+            if (value == null) {
+                return null;
+            }
+            String selected = null;
+            if (value instanceof Iterable) {
+                for (Object author : (Iterable<?>) value) {
+                    String name = author instanceof UnmodifiableConfig
+                            ? valueString(((UnmodifiableConfig) author).get("name")) : valueString(author);
+                    selected = minAuthor(selected, name);
+                }
+            } else {
+                selected = minAuthor(null, valueString(value));
+            }
+            return selected;
+        }
     }
 
     private static String minAuthor(String selected, String candidate) {

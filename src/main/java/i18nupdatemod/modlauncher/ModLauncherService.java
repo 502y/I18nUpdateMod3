@@ -8,6 +8,7 @@ import cpw.mods.modlauncher.api.ITransformer;
 import cpw.mods.modlauncher.api.IncompatibleEnvironmentException;
 import i18nupdatemod.I18nUpdateMod;
 import i18nupdatemod.util.Log;
+import i18nupdatemod.core.RuntimePackActivation;
 import i18nupdatemod.util.ModUtil;
 import i18nupdatemod.util.Reflection;
 import org.jetbrains.annotations.NotNull;
@@ -40,6 +41,12 @@ public class ModLauncherService implements ITransformationService {
             Log.warning("Minecraft version not found");
             return;
         }
+        try {
+            Class.forName("net.neoforged.fml.loading.FMLLoader", false, getClass().getClassLoader());
+            RuntimePackActivation.enable();
+        } catch (ClassNotFoundException ignored) {
+            // Forge keeps the existing file-based activation path.
+        }
         I18nUpdateMod.init(minecraftPath.get(), minecraftVersion, "Forge", ModUtil.getModsFromModsFolder(minecraftPath.get()));
     }
 
@@ -55,7 +62,7 @@ public class ModLauncherService implements ITransformationService {
 
     @Override
     public @NotNull List<ITransformer> transformers() {
-        return Collections.emptyList();
+        return Collections.singletonList(ModLauncherPackTransformer.create());
     }
 
     private String getMinecraftVersion() {

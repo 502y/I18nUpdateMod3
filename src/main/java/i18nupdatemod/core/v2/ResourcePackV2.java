@@ -7,6 +7,7 @@ import i18nupdatemod.entity.ModTranslation;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -44,11 +45,20 @@ public class ResourcePackV2 {
                 plan.targetVersion, namespaces, manifest.blackList, cacheRoot, baseUrl);
         Path icon = ResourcePackDownloader.downloadIcon(baseUrl, plan.targetVersion, cacheRoot);
 
-        Path convertedCache = cacheRoot.resolve(minecraftVersion).resolve(plan.convertedFileName);
         Path convertedOutput = resourcePackDirectory.resolve(plan.convertedFileName);
-        new ResourcePackConverter(sources, convertedCache, false)
-                .convert(plan.packMetaData, plan.description, new HashSet<>(namespaces.values()), icon);
-        Files.copy(convertedCache, convertedOutput, StandardCopyOption.REPLACE_EXISTING);
-        return convertedOutput;
+        Path temporary = Files.createTempFile(resourcePackDirectory, plan.convertedFileName + ".", ".tmp");
+        try {
+            new ResourcePackConverter(sources, temporary, false)
+                    .convert(plan.packMetaData, plan.description, new HashSet<>(namespaces.values()), icon);
+            try {
+                Files.move(temporary, convertedOutput,
+                        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporary, convertedOutput, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return convertedOutput;
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 }

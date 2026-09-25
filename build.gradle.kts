@@ -32,12 +32,9 @@ fun ShadowJar.configureI18nPackaging() {
     archiveBaseName.set("I18nUpdateMod")
     relocate("com.google.archivepatcher", "include.com.google.archivepatcher")
     relocate("org.tukaani.xz", "include.org.tukaani.xz")
-    relocate("com.electronwill.nightconfig", "include.com.electronwill.nightconfig")
     dependencies {
         include(dependency("net.runelite.archive-patcher:archive-patcher-applier:.*"))
         include(dependency("org.tukaani:xz:.*"))
-        include(dependency("com.electronwill.night-config:core:.*"))
-        include(dependency("com.electronwill.night-config:toml:.*"))
     }
     exclude("LICENSE")
 }
@@ -102,8 +99,11 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.3")
     implementation("net.runelite.archive-patcher:archive-patcher-applier:1.2")
     implementation("org.tukaani:xz:1.10")
-    implementation("com.electronwill.night-config:core:3.6.7")
-    implementation("com.electronwill.night-config:toml:3.6.7")
+    // Forge 1.13.x provides NightConfig 3.6.0; keep that API baseline without bundling it.
+    compileOnly("com.electronwill.night-config:core:3.6.0")
+    compileOnly("com.electronwill.night-config:toml:3.6.0")
+    testRuntimeOnly("com.electronwill.night-config:core:3.6.0")
+    testRuntimeOnly("com.electronwill.night-config:toml:3.6.0")
     compileOnly("org.jetbrains:annotations:24.1.0")
     // Only the early-service interface is linked; never bundle loader implementation classes.
     compileOnly("net.neoforged.fancymodloader:loader:10.0.34") {
@@ -118,6 +118,7 @@ dependencies {
 
     implementation("commons-io:commons-io:2.16.1")
     implementation("org.ow2.asm:asm:9.7")
+    implementation("org.ow2.asm:asm-tree:9.7")
     // Minecraft supplies Gson at runtime; compile against the 1.7.10 API baseline.
     implementation("com.google.code.gson:gson:2.2.4")
 

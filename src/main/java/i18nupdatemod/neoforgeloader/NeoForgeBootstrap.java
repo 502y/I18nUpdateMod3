@@ -1,6 +1,7 @@
 package i18nupdatemod.neoforgeloader;
 
 import i18nupdatemod.I18nUpdateMod;
+import i18nupdatemod.core.RuntimePackActivation;
 import i18nupdatemod.util.Log;
 import i18nupdatemod.util.ModUtil;
 import i18nupdatemod.util.Reflection;
@@ -32,6 +33,7 @@ public class NeoForgeBootstrap implements GraphicsBootstrapper {
             Log.setMinecraftLogFile(gameDir);
             // FML consumes --fml.mcVersion before calling bootstrappers; do not parse arguments.
             String version = (String) loader.get("getVersionInfo()").get("mcVersion()").get();
+            RuntimePackActivation.enable();
             I18nUpdateMod.init(gameDir, version, "Forge", ModUtil.getModsFromModsFolder(gameDir));
         } catch (Exception e) {
             Log.warning("Failed to initialize NeoForge resource pack update: %s", e);
