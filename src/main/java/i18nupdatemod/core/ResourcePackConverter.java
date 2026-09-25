@@ -48,8 +48,11 @@ public class ResourcePackConverter {
                             ZipEntry ze = e.nextElement();
                             String name = ze.getName();
                             String[] parts = name.split("/");
-                            // 正在筛选的是assets/modDomain/** && 当前的modDomain不需要
-                            if (parts.length >= 2 && !modDomainsSet.contains(parts[1])) {
+                            // Keep Minecraft's baseline fixes, but do not implicitly select its language files.
+                            boolean minecraftFix = parts.length >= 2
+                                    && "assets".equals(parts[0]) && "minecraft".equals(parts[1])
+                                    && (parts.length < 3 || !"lang".equals(parts[2]));
+                            if (parts.length >= 2 && !minecraftFix && !modDomainsSet.contains(parts[1])) {
                                 continue;
                             }
 

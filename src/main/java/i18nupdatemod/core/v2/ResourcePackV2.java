@@ -39,6 +39,9 @@ public class ResourcePackV2 {
 
         ResourcePackDownloader.Manifest manifest = ResourcePackDownloader.loadManifest(baseUrl, plan.targetVersion);
         Map<String, String> namespaces = ResourcePackDownloader.selectNamespaces(mods, manifest);
+        // Capture language eligibility before adding Minecraft's baseline fixes.
+        HashSet<String> modDomains = new HashSet<>(namespaces.values());
+        namespaces.put("minecraft", "minecraft");
 
         Files.createDirectories(resourcePackDirectory);
         List<Path> sources = ResourcePackDownloader.download(
@@ -49,7 +52,7 @@ public class ResourcePackV2 {
         Path temporary = Files.createTempFile(resourcePackDirectory, plan.convertedFileName + ".", ".tmp");
         try {
             new ResourcePackConverter(sources, temporary, false)
-                    .convert(plan.packMetaData, plan.description, new HashSet<>(namespaces.values()), icon);
+                    .convert(plan.packMetaData, plan.description, modDomains, icon);
             try {
                 Files.move(temporary, convertedOutput,
                         StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);

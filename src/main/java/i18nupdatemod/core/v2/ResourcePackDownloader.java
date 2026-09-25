@@ -158,6 +158,11 @@ public class ResourcePackDownloader {
 
         List<String> blocked = blackList == null
                 ? Collections.emptyList() : blackList;
+        // Minecraft's baseline fixes are not optional mod translations.
+        if (blocked.contains("minecraft")) {
+            blocked = new ArrayList<>(blocked);
+            blocked.removeIf("minecraft"::equals);
+        }
         String root = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
         Path modCache = cacheRoot.resolve(version).resolve("mods");
         Files.createDirectories(modCache);
